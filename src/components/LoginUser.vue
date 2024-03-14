@@ -1,6 +1,6 @@
 <template>
     <div class="apple-theme">
-        <form @submit="loginUser">
+        <form @submit.prevent="loginUser">
             <label for="email">Email:</label>
             <input type="email" id="email" v-model="email" required>
             
@@ -23,14 +23,13 @@ export default {
         };
     },
     methods: {
-        loginUser(event) {
-            event.preventDefault();
-            
-            axios.post('/api/login', {
+        loginUser() {           
+            axios.post('http://localhost:3000/login', {
                 email: this.email,
                 password: this.password
             })
             .then(response => {
+                console.log(response)
                 const sessionToken = response.data.sessionToken;
                 localStorage.setItem('sessionToken', sessionToken);
                 

@@ -26,7 +26,7 @@ export default {
         registerUser(event) {
             event.preventDefault();
             
-            axios.post('/api/register', {
+            axios.post('http://localhost:3000/register', {
                 email: this.email,
                 password: this.password
             })

@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql');
 const uuid = require('uuid');
 require('dotenv').config();
-
+const cors = require('cors');
 
 const app = express();
 const port = 3000;
@@ -29,8 +29,15 @@ connection.connect((err) => {
 // Middleware to parse request body
 app.use(bodyParser.json());
 
+// CORS middleware
+app.use(cors({
+    origin: '*',
+    methods: '*',
+    allowedHeaders: '*'
+}));
+
 // Registration event
-app.post('/api/register', (req, res) => {
+app.post('/register', (req, res) => {
     const { email, password } = req.body;
 
     // Hashing the password
@@ -57,7 +64,7 @@ app.post('/api/register', (req, res) => {
 });
 
 // Login
-app.post('/api/login', (req, res) => {
+app.post('/login', (req, res) => {
     const { email, password } = req.body;
     // Fetch user from the database
     connection.query('SELECT * FROM users WHERE email = ?', email, (err, results) => {
@@ -85,7 +92,7 @@ app.post('/api/login', (req, res) => {
             // Generate session token
             const sessionToken = generateSessionToken();
             // Save session token in the database
-            connection.query('UPDATE users SET sessionToken = ? WHERE id = ?', [sessionToken, user.id], (err) => {
+            connection.query('UPDATE users SET sessionToken = ? WHERE email = ?', [sessionToken, email], (err) => {
                 if (err) {
                     console.error('Error saving session token in database:', err);
                     res.status(500).send('Internal Server Error');
@@ -93,15 +100,14 @@ app.post('/api/login', (req, res) => {
                 }
                 res.status(200).json({ sessionToken });
             });
+            });
         });
     });
-});
 
 function generateSessionToken() {
     const sessionToken = uuid.v4();
     return sessionToken;
 }
-
 
 
 
