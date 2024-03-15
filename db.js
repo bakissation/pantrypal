@@ -1,68 +1,78 @@
-const mysql = require('mysql');
+const Sequelize = require('sequelize');
 
 require('dotenv').config();
 
-const db = mysql.createConnection({
+const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
     host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
+    dialect: 'mysql'
 });
 
-db.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to MySQL server.');
-    createDatabase();
-});
+async function connectToDatabase() {
+    try {
+        await sequelize.authenticate();
+        console.log('Connected to MySQL server.');
+        await createDatabase();
+        await sequelize.close();
+    } catch (err) {
+        console.error('Error connecting to MySQL server:', err);
+    }
+}
 
-function createDatabase() {
-    const createDatabaseQuery = `CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME}`;
-    db.query(createDatabaseQuery, (err) => {
-        if (err) throw err;
+async function createDatabase() {
+    try {
+        await sequelize.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME}`);
         console.log('Database created.');
-        useDatabase();
-    });
+        await useDatabase();
+    } catch (err) {
+        console.error('Error creating database:', err);
+    }
 }
 
-function useDatabase() {
-    const useDatabaseQuery = `USE ${process.env.DB_NAME}`;
-    db.query(useDatabaseQuery, (err) => {
-        if (err) throw err;
+async function useDatabase() {
+    try {
+        await sequelize.query(`USE ${process.env.DB_NAME}`);
         console.log('Using database.');
-        createTables();
-    });
+        await createTables();
+    } catch (err) {
+        console.error('Error using database:', err);
+    }
 }
 
-function createTables() {
-    const createTablesQuery = [
-        `CREATE TABLE IF NOT EXISTS users (
-            user_id INT AUTO_INCREMENT PRIMARY KEY,
-            email VARCHAR(255) NOT NULL,
-            password VARCHAR(255) NOT NULL
-        )`,
-        `CREATE TABLE IF NOT EXISTS fridges (
-            fridge_id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
-        )`,
-        `CREATE TABLE IF NOT EXISTS ingredients (
-            ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL
-        )`,
-        `CREATE TABLE IF NOT EXISTS fridge_ingredients (
-            fridge_id INT,
-            ingredient_id INT,
-            quantity INT NOT NULL,
-            FOREIGN KEY (fridge_id) REFERENCES fridges(fridge_id),
-            FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id)
-        )`
-    ];
-
-    createTablesQuery.forEach(query => {
-        db.query(query, (err) => {
-            if (err) throw err;
-        });
-    });
-
-    console.log('Tables created.');
-    db.end();
+async function createTables() {
+    try {
+        await sequelize.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                email VARCHAR(255) NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                sessionToken VARCHAR(255)
+            )
+        `);
+        await sequelize.query(`
+            CREATE TABLE IF NOT EXISTS fridges (
+                fridge_id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        `);
+        await sequelize.query(`
+            CREATE TABLE IF NOT EXISTS ingredients (
+                ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL
+            )
+        `);
+        await sequelize.query(`
+            CREATE TABLE IF NOT EXISTS fridge_ingredients (
+                fridge_id INT,
+                ingredient_id INT,
+                quantity INT NOT NULL,
+                FOREIGN KEY (fridge_id) REFERENCES fridges(fridge_id),
+                FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id)
+            )
+        `);
+        console.log('Tables created.');
+    } catch (err) {
+        console.error('Error creating tables:', err);
+    }
 }
+
+connectToDatabase();

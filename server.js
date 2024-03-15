@@ -1,32 +1,51 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
-const mysql = require('mysql');
+const Sequelize = require('sequelize');
 const uuid = require('uuid');
-require('dotenv').config();
 const cors = require('cors');
+
+require('dotenv').config();
 
 const app = express();
 const port = 3000;
 
-// MySQL connection
-const connection = mysql.createConnection({
+// Sequelize connection
+const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
     host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    dialect: 'mysql'
 });
 
-// Connect to the MySQL database
-connection.connect((err) => {
-    if (err) {
-        console.error('Error connecting to MySQL:', err);
-        return;
+// User model
+const User = sequelize.define('user', {
+    email: {
+        type: Sequelize.STRING,
+        allowNull: false,
+        unique: true,
+        primaryKey: true
+    },
+    password: {
+        type: Sequelize.STRING,
+        allowNull: false
+    },
+    sessionToken: {
+        type: Sequelize.STRING,
+        allowNull: true
     }
-    console.log('Connected to MySQL database');
+}, {
+    timestamps: false
 });
 
-// Middleware to parse request body
+// Connect to the database
+sequelize.authenticate()
+    .then(() => {
+        console.log('Connected to the database');
+    })
+    .catch((err) => {
+        console.error('Error connecting to the database:', err);
+    });
+
+// Middleware to parse body
 app.use(bodyParser.json());
 
 // CORS middleware
@@ -49,70 +68,66 @@ app.post('/register', (req, res) => {
         }
 
         // Saving the user in the database
-        const user = { email, password: hashedPassword };
-        connection.query('INSERT INTO users SET ?', user, (err) => {
-            if (err) {
+        User.create({ email, password: hashedPassword })
+            .then(() => {
+                console.log('Registration successful');
+                res.sendStatus(200);
+            })
+            .catch((err) => {
                 console.error('Error saving user in database:', err);
                 res.status(500).send('Internal Server Error');
-                return;
-            }
-
-            console.log('Registration successful');
-            res.sendStatus(200);
-        });
+            });
     });
 });
 
 // Login
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
+
     // Fetch user from the database
-    connection.query('SELECT * FROM users WHERE email = ?', email, (err, results) => {
-        if (err) {
-            console.error('Error fetching user from database:', err);
-            res.status(500).send('Internal Server Error');
-            return;
-        }
-        if (results.length === 0) {
-            res.status(401).send('Invalid email or password');
-            return;
-        }
-        const user = results[0];
-        // Compare passwords
-        bcrypt.compare(password, user.password, (err, isMatch) => {
-            if (err) {
-                console.error('Error comparing passwords:', err);
-                res.status(500).send('Internal Server Error');
-                return;
-            }
-            if (!isMatch) {
+    User.findOne({ where: { email } })
+        .then((user) => {
+            if (!user) {
                 res.status(401).send('Invalid email or password');
                 return;
             }
-            // Generate session token
-            const sessionToken = generateSessionToken();
-            // Save session token in the database
-            connection.query('UPDATE users SET sessionToken = ? WHERE email = ?', [sessionToken, email], (err) => {
+
+            // Compare passwords
+            bcrypt.compare(password, user.password, (err, isMatch) => {
                 if (err) {
-                    console.error('Error saving session token in database:', err);
+                    console.error('Error comparing passwords:', err);
                     res.status(500).send('Internal Server Error');
                     return;
                 }
-                res.status(200).json({ sessionToken });
+                if (!isMatch) {
+                    res.status(401).send('Invalid email or password');
+                    return;
+                }
+
+                // Generate session token
+                const sessionToken = generateSessionToken();
+
+                // Save session token in the database
+                user.update({ sessionToken })
+                    .then(() => {
+                        res.status(200).json({ sessionToken });
+                    })
+                    .catch((err) => {
+                        console.error('Error saving session token in database:', err);
+                        res.status(500).send('Internal Server Error');
+                    });
             });
-            });
+        })
+        .catch((err) => {
+            console.error('Error fetching user from database:', err);
+            res.status(500).send('Internal Server Error');
         });
-    });
+});
 
 function generateSessionToken() {
     const sessionToken = uuid.v4();
     return sessionToken;
 }
-
-
-
-
-
 
 // Start the server
 app.listen(port, () => {
