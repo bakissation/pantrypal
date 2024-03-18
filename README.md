@@ -15,7 +15,7 @@ Here's a brief explanation of the project structure:
   - `router/`: This directory contains Vue Router configuration.
   - `views/`: This directory contains Vue.js view components.
 - `public/`: This directory contains public files like `index.html` and `favicon.ico`.
-- `docker-compose.yaml` and `Dockerfile`: These files are used for setting up Docker for the application.
+- `docker-compose.yaml` and `Dockerfile`: These files will be used for setting up Docker for the application (WIP).
 - `package.json`: This file contains the list of project dependencies and scripts.
 
 ## Getting Started
@@ -24,14 +24,13 @@ Here's a brief explanation of the project structure:
 
 - Node.js
 - npm
-- Docker (optional)
 
 ### Installation
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/username/pantrypal.git
+git clone https://github.com/bakissation/pantrypal.git
 ```
 
 2. Install the dependencies:
