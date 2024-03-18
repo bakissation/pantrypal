@@ -1,22 +1,24 @@
+// Importing required modules
 const express = require('express');
-const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const Sequelize = require('sequelize');
 const uuid = require('uuid');
 const cors = require('cors');
 
+// Loading environment variables
 require('dotenv').config();
 
+// Creating an Express app
 const app = express();
 const port = 3000;
 
-// Sequelize connection
+// Setting up Sequelize connection
 const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
     host: process.env.DB_HOST,
     dialect: 'mysql'
 });
 
-// User model
+// Defining User model
 const User = sequelize.define('user', {
     email: {
         type: Sequelize.STRING,
@@ -36,100 +38,74 @@ const User = sequelize.define('user', {
     timestamps: false
 });
 
-// Connect to the database
+// Connecting to the database
 sequelize.authenticate()
-    .then(() => {
-        console.log('Connected to the database');
-    })
-    .catch((err) => {
-        console.error('Error connecting to the database:', err);
-    });
+    .then(() => console.log('Connected to the database'))
+    .catch((err) => console.error('Error connecting to the database:', err));
 
-// Middleware to parse body
-app.use(bodyParser.json());
+// Using express.json middleware to parse JSON bodies
+app.use(express.json());
 
-// CORS middleware
+// Using CORS middleware with environment variables
 app.use(cors({
-    origin: '*',
-    methods: '*',
-    allowedHeaders: '*'
+    origin: process.env.CORS_ORIGIN || '*',
+    methods: process.env.CORS_METHODS || '*',
+    allowedHeaders: process.env.CORS_HEADERS || '*'
 }));
 
-// Registration event
-app.post('/register', (req, res) => {
+// Registration route
+app.post('/register', async (req, res) => {
     const { email, password } = req.body;
 
-    // Hashing the password
-    bcrypt.hash(password, 10, (err, hashedPassword) => {
-        if (err) {
-            console.error('Error hashing password:', err);
-            res.status(500).send('Internal Server Error');
+    try {
+        // Checking if the email already exists in the database
+        const existingUser = await User.findOne({ where: { email } });
+        if (existingUser) {
+            res.status(409).send('Email already exists');
             return;
         }
 
+        // Hashing the password synchronously
+        const hashedPassword = bcrypt.hashSync(password, 10);
+
         // Saving the user in the database
-        User.create({ email, password: hashedPassword })
-            .then(() => {
-                console.log('Registration successful');
-                res.sendStatus(200);
-            })
-            .catch((err) => {
-                console.error('Error saving user in database:', err);
-                res.status(500).send('Internal Server Error');
-            });
-    });
+        await User.create({ email, password: hashedPassword });
+        console.log('Registration successful');
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('Error saving user in database:', err);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
-// Login
-app.post('/login', (req, res) => {
+// Login route
+app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
-    // Fetch user from the database
-    User.findOne({ where: { email } })
-        .then((user) => {
-            if (!user) {
-                res.status(401).send('Invalid email or password');
-                return;
-            }
+    try {
+        // Fetching user from the database
+        const user = await User.findOne({ where: { email } });
 
-            // Compare passwords
-            bcrypt.compare(password, user.password, (err, isMatch) => {
-                if (err) {
-                    console.error('Error comparing passwords:', err);
-                    res.status(500).send('Internal Server Error');
-                    return;
-                }
-                if (!isMatch) {
-                    res.status(401).send('Invalid email or password');
-                    return;
-                }
+        // If user doesn't exist or password doesn't match, send 401 status
+        if (!user || !bcrypt.compareSync(password, user.password)) {
+            res.status(401).send('Invalid email or password');
+            return;
+        }
 
-                // Generate session token
-                const sessionToken = generateSessionToken();
+        // Generating session token
+        const sessionToken = uuid.v4();
 
-                // Save session token in the database
-                user.update({ sessionToken })
-                    .then(() => {
-                        res.status(200).json({ sessionToken });
-                    })
-                    .catch((err) => {
-                        console.error('Error saving session token in database:', err);
-                        res.status(500).send('Internal Server Error');
-                    });
-            });
-        })
-        .catch((err) => {
-            console.error('Error fetching user from database:', err);
-            res.status(500).send('Internal Server Error');
-        });
+        // Saving session token in the database
+        await user.update({ sessionToken });
+
+        res.status(200).json({ sessionToken });
+    } catch (err) {
+        console.error('Error:', err);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
-function generateSessionToken() {
-    const sessionToken = uuid.v4();
-    return sessionToken;
-}
-
-// Start the server
+// Starting the server
 app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
 });
